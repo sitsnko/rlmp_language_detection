@@ -54,7 +54,17 @@ class tx_rlmplanguagedetection_pi1 extends \TYPO3\CMS\Frontend\Plugin\AbstractPl
 	public function main($content, $conf) {
 		$this->conf = $conf;
 		$this->cookieLifetime = intval($conf['cookieLifetime']);
-
+		$this->domainRecord = $this->getCurrentDomainRecord();
+		
+		
+		// Break out if domain record is disabled
+		if ($this->domainRecord["disable_language_detection"]) {
+		    if (TYPO3_DLOG) {
+		        \TYPO3\CMS\Core\Utility\GeneralUtility::devLog('Break out since domain record is disabled', $this->extKey);
+		    }
+		    return $content;
+		}
+		
 		// Break out if language already selected
 		if (!$this->conf['dontBreakIfLanguageIsAlreadySelected'] && \TYPO3\CMS\Core\Utility\GeneralUtility::_GP($this->conf['languageGPVar']) !== NULL) {
 			if (TYPO3_DLOG) {
@@ -463,7 +473,13 @@ class tx_rlmplanguagedetection_pi1 extends \TYPO3\CMS\Frontend\Plugin\AbstractPl
 				unset($availableLanguages[$excludeLanguage]);
 			}
 		}
-
+		// Replace the default language UID (if default language != 0)
+		if($this->conf['replaceDefaultLanguageUID'] != '' && $availableLanguages[strtolower($this->conf['replaceDefaultLanguageUID'])]) {
+		    if (TYPO3_DLOG) {
+		        \TYPO3\CMS\Core\Utility\GeneralUtility::devLog('DefaultLanguageUID is set to ' . $this->conf['replaceDefaultLanguageUID'], $this->extKey);
+		    }
+		    $availableLanguages[$this->conf['replaceDefaultLanguageUID']] = 0;
+		}
 		return $availableLanguages;
 	}
 
@@ -525,7 +541,25 @@ class tx_rlmplanguagedetection_pi1 extends \TYPO3\CMS\Frontend\Plugin\AbstractPl
 		debug($parentObject);
 		die();
 	}
-
+	
+	/**
+	 * Returns the current domain record
+	 *
+	 * @return    array    Domain record
+	 */
+	private function getCurrentDomainRecord () {
+	    $requestDomain = t3lib_div::getIndpEnv('HTTP_HOST');
+	    $ressource  = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+	            '*',                                // SELECT
+	            'sys_domain',                       // FROM
+	            "sys_domain.domainName = '".$requestDomain."' OR sys_domain.domainName = '".$requestDomain."/'",   // WHERE
+	            '',                                 // GROUP BY
+	            'sys_domain.pid, sys_domain.domainName',                                 // ORDER BY
+	            ''                                  // LIMIT
+	    );
+	    $row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($ressource);
+	    return $row;
+	}
 }
 
 if (defined('TYPO3_MODE') && $TYPO3_CONF_VARS[TYPO3_MODE]['XCLASS']['ext/rlmp_language_detection/pi1/class.tx_rlmplanguagedetection_pi1.php']) {
